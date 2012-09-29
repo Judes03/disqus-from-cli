@@ -1,0 +1,118 @@
+#!/usr/bin/php
+<?php
+define('CONFIG_FILE', $_SERVER['HOME']."/.disqus");
+function setup_wizard()
+{
+    $config_options = array('api', 'name', 'email');
+    $config_notexist = array();
+    $config_labels = array(
+	'api' => 'Your disqus API key(generate one at http://disqus.com/api/applications/):',
+	'name' => 'Your name:',
+	'email' => 'Your email address:'
+    );
+    if(file_exists(CONFIG_FILE))
+    {
+	$config = parse_ini_file(CONFIG_FILE);
+	foreach($config_options as $option)
+	{
+	    if(!array_key_exists($option, $config))
+		$config_notexist[] = $option;
+	}
+    } else
+    {
+	$config_notexist = $config_options;
+    }
+    $config_file = fopen(CONFIG_FILE, 'a');
+    if($config_file == false)
+    {
+	echo "Cannot open config file: ".CONFIG_FILE." to write. Check permissions.\n";
+	exit(1);
+    }
+    foreach($config_notexist as $option)
+    {
+	echo $config_labels[$option]; 
+	$line = fgets(STDIN);
+	fwrite($config_file, "$option = $line");
+    }
+    fclose($config_file);
+    return parse_ini_file(CONFIG_FILE);
+}
+function update_config_file($config=array())
+{
+}
+function curl_fileds_str($fields)
+{
+    $fields_string = '';
+    foreach($fields as $key=>$value) { $fields_string .= $key.'='.$value.'&'; }
+    rtrim($fields_string,'&');
+    return $fields_string;
+}
+
+$config = setup_wizard();
+$options = getopt("t:c:a:n:e:w:");
+$message = "";
+$thread = ""; //Threat URL
+if(!isset($options['t']))
+{
+    echo "Usage: -t threadID [-c comment][-a api_key][-n name][-e email][-w]\n";
+    echo "	 If -w option is passed, -a, -n and -e options will be saved to config file\n";
+    exit(1);
+}
+if(!isset($options['c']))
+{
+    echo "Post your message. Press ^D when you finish\n";
+    while (FALSE !== ($line = fgets(STDIN))) {
+	$message .= $line;
+    }
+} else
+{
+    $message = $options['c'];
+}
+if(isset($options['a']))
+    $config['api'] = $options['a'];
+if(isset($options['n']))
+    $config['name'] = $options['n'];
+if(isset($options['e']))
+    $config['email'] = $options['e'];
+
+if(isset($options['w']))
+    update_config_file($config);
+
+
+$thread = $options['t'];
+
+$url_thread_id = 'http://disqus.com/api/3.0/threads/details.json';
+$fields = array(
+    'api_secret'=>urlencode($config['api']), // change to api_key when using a public key
+    'thread:ident'=>urlencode($thread),
+);
+
+$fields_string = curl_fileds_str($fields);
+$ch = curl_init();
+curl_setopt($ch,CURLOPT_URL,$url_thread_id.'?'.$fields_string);
+
+$result = curl_exec($ch);
+print_r($result);
+curl_close($ch);
+$thread_id = $thread;
+//exit(1);
+
+
+$url_post = 'http://disqus.com/api/3.0/posts/create.json'; 
+$fields = array(
+    'api_secret'=>urlencode($config['api']), // change to api_key when using a public key
+    'thread'=>urlencode($thread_id),
+    'message'=>urlencode($message),
+    'author_email'=>urlencode($config['email']),
+    'author_name'=>urlencode($config['name']),
+);
+
+$fields_string = curl_fileds_str($fields);
+$ch = curl_init();
+curl_setopt($ch,CURLOPT_URL,$url_post);
+curl_setopt($ch,CURLOPT_POST,count($fields));
+curl_setopt($ch,CURLOPT_POSTFIELDS,$fields_string);
+
+$result = curl_exec($ch);
+curl_close($ch);
+print_r($result);
