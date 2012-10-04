@@ -43,8 +43,14 @@ function setup_wizard()
 }
 function update_config_file($config=array())
 {
-    $config_file_values = parse_ini_file(CONFIG_FILE);
-    $new_config = array_replace($config_file_values, $config);
+    if(file_exists(CONFIG_FILE))
+    {
+	$config_file_values = parse_ini_file(CONFIG_FILE);
+	$new_config = array_replace($config_file_values, $config);
+    } else
+    {
+	$new_config = $config;
+    }
     
     $config_file = fopen(CONFIG_FILE, 'w');
     if($config_file == false)
@@ -71,8 +77,10 @@ function curl_fileds_str($fields)
     return $fields_string;
 }
 
-$config = setup_wizard();
+$config = array();
 $options = getopt("t:c:a:n:e:wh");
+if(!isset($options['w']))
+    $config = setup_wizard();
 $message = "";
 $thread = ""; //Threat URL
 
@@ -90,8 +98,10 @@ if(isset($options['e']))
     $config['email'] = $options['e'];
 
 if(isset($options['w']))
+{
     update_config_file($config);
-
+    $config = setup_wizard();
+}
 
 if(isset($options['t']))
 {
