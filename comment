@@ -3,12 +3,11 @@
 define('CONFIG_FILE', $_SERVER['HOME']."/.disqus");
 function setup_wizard()
 {
-    $config_options = array('api', 'name', 'email');
+    $config_options = array('api_key', 'access_token');
     $config_notexist = array();
     $config_labels = array(
-	'api' => 'Your disqus API key(generate one at http://disqus.com/api/applications/):',
-	'name' => 'Your name:',
-	'email' => 'Your email address:'
+	'api_key' => 'Your disqus public API key(generate one at http://disqus.com/api/applications/):',
+	'access_token' => 'Your account acces token:',
     );
     if(file_exists(CONFIG_FILE))
     {
@@ -76,9 +75,27 @@ function curl_fileds_str($fields)
     rtrim($fields_string,'&');
     return $fields_string;
 }
+function get_forum($url)
+{
+    $subject = file_get_contents($url);
+    $pattern = '/disqus_shortname.*=.*(\'|")(.*)(\'|")/';
+    preg_match($pattern, $subject, $matches);
+    if(isset($matches[2]))
+    {
+	return $matches[2];
+    } else
+    {
+    }
+}
+function help_msg()
+{
+    echo "Usage: [-u disqus page url][-c comment][-a api_key][-t acount_access_token][-w][-h]\n";
+    echo "       If -w option is passed, -a and -t options will be saved to config file\n";
+    exit(0);
+}
 
 $config = array();
-$options = getopt("t:c:a:n:e:wh");
+$options = getopt("u:c:a:t:wh");
 if(!isset($options['w']))
     $config = setup_wizard();
 $message = "";
@@ -86,16 +103,12 @@ $thread = ""; //Threat URL
 
 if(isset($options['h']) || empty($options))
 {
-    echo "Usage: [-t threadID][-c comment][-a api_key][-n name][-e email][-w][-h]\n";
-    echo "       If -w option is passed, -a, -n and -e options will be saved to config file\n";
-    exit(0);
+    help_msg();
 }
 if(isset($options['a']))
-    $config['api'] = $options['a'];
-if(isset($options['n']))
-    $config['name'] = $options['n'];
-if(isset($options['e']))
-    $config['email'] = $options['e'];
+    $config['api_key'] = $options['a'];
+if(isset($options['t']))
+    $config['access_token'] = $options['t'];
 
 if(isset($options['w']))
 {
@@ -103,7 +116,7 @@ if(isset($options['w']))
     $config = setup_wizard();
 }
 
-if(isset($options['t']))
+if(isset($options['u']))
 {
     if(!isset($options['c']))
     {
@@ -115,32 +128,40 @@ if(isset($options['t']))
     {
 	$message = $options['c'];
     }
-    $thread = $options['t'];
+    $thread = $options['u'];
 
+    $forum = get_forum($thread);
+    echo "Disqus forum name: $forum\n";
     $url_thread_id = 'http://disqus.com/api/3.0/threads/details.json';
     $fields = array(
-	'api_secret'=>urlencode($config['api']), // change to api_key when using a public key
+	'api_key'=>urlencode($config['api_key']), // change to api_key when using a public key
 	'thread:link'=>urlencode($thread),
-	'forum' => 'disqustestbyhafron'
+	'forum' => urlencode($forum)
     );
 
     $fields_string = curl_fileds_str($fields);
     $ch = curl_init();
     curl_setopt($ch,CURLOPT_URL,$url_thread_id.'?'.$fields_string);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 
     $result = curl_exec($ch);
     curl_close($ch);
     $thread_data = json_decode($result);
-    $thread_id = $thread_data['response']['id'];
-    exit(0);
+    if($thread_data->code != 0)
+    {
+	echo $thread_data->response."\n";
+	exit(1);
+    }
+    $thread_id = $thread_data->response->id;
+
+    echo "Thread id: $thread_id\n";
 
     $url_post = 'http://disqus.com/api/3.0/posts/create.json'; 
     $fields = array(
-	'api_secret'=>urlencode($config['api']), // change to api_key when using a public key
+	'api_key'=>urlencode($config['api_key']),
+	'access_token'=>urlencode($config['access_token']),
 	'thread'=>urlencode($thread_id),
 	'message'=>urlencode($message),
-	'author_email'=>urlencode($config['email']),
-	'author_name'=>urlencode($config['name']),
     );
 
     $fields_string = curl_fileds_str($fields);
@@ -148,8 +169,17 @@ if(isset($options['t']))
     curl_setopt($ch,CURLOPT_URL,$url_post);
     curl_setopt($ch,CURLOPT_POST,count($fields));
     curl_setopt($ch,CURLOPT_POSTFIELDS,$fields_string);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 
     $result = curl_exec($ch);
     curl_close($ch);
-    print_r($result);
+    $result_obj = json_decode($result);
+    if($result_obj->code != 0)
+    {
+	echo $result_obj->response."\n";
+	exit(1);
+    }
+} else
+{
+    help_msg();
 }
