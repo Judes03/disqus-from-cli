@@ -1,0 +1,28 @@
+#!/bin/bash
+#DISQUS comment script full path
+COMMENT_PATH=/home/hafron/dev/disqus-from-cli/comment 
+MAIL_PATH=/usr/bin/mail
+LOG_FILE=/home/hafron/tmp/disqus.log
+MAIL_TITLE="[Auto]Disqus comment result"
+while read x
+do
+    if [[ "$x" =~ Subject:\ (.*) ]]; then
+	url="${BASH_REMATCH[1]}"
+    elif [[ "$x" =~ From\ ([^ ]*) ]]; then
+	from="${BASH_REMATCH[1]}"
+    elif [[ -z "$x" ]]; then
+	break
+    fi
+done
+
+while read x
+do
+    comm=$comm$x
+done
+echo "[`date`]" >> $LOG_FILE
+echo "URL: $url" >> $LOG_FILE
+echo "FROM: $from" >> $LOG_FILE
+out="`$COMMENT_PATH -c "$comm" -u "$url"`"
+echo "$out" >> $LOG_FILE
+echo "" >> $LOG_FILE
+echo "$out" | $MAIL_PATH -s "$MAIL_TITLE" $from

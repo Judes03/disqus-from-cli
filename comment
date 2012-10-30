@@ -15,7 +15,8 @@
 
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
+*/
+
 define('CONFIG_FILE', $_SERVER['HOME']."/.disqus");
 function setup_wizard()
 {
@@ -93,7 +94,12 @@ function curl_fileds_str($fields)
 }
 function get_forum($url)
 {
-    $subject = file_get_contents($url);
+    $subject = @file_get_contents($url);
+    if($subject == false)
+    {
+	echo "Cannot open page with given url.\n";
+	exit(1);
+    }
     $pattern = '/disqus_shortname.*=.*(\'|")(.*)(\'|")/';
     preg_match($pattern, $subject, $matches);
     if(isset($matches[2]))
@@ -148,6 +154,11 @@ if(isset($options['u']))
 	$message = $options['c'];
     }
     $thread = $options['u'];
+    if($thread == '')
+    {
+	echo "Page url cannot be empty.";
+	exit(0);
+    }
 
     $forum = get_forum($thread);
 
