@@ -15,10 +15,17 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-COMMENT_PATH=/home/hafron/dev/disqus-from-cli/comment 
+COMMENT_PATH=$( which comment )
 MAIL_PATH=/usr/bin/mail
 LOG_FILE=/home/hafron/tmp/disqus.log
 MAIL_TITLE="[Auto]Disqus comment result"
+
+if [ -z "${COMMENT_PATH}" ]
+then
+  echo "cant locate 'comment' script on \$PATH: $PATH "
+  exit 1
+fi
+
 while read x
 do
     if [[ "$x" =~ Subject:\ (.*) ]]; then

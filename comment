@@ -18,6 +18,13 @@
 */
 
 define('CONFIG_FILE', $_SERVER['HOME']."/.disqus");
+define('PATTERN_FILE', $_SERVER['HOME']."/.disqus-patterns");
+define('DEFAULT_PATTERNS', serialize(
+    array(
+	'/disqus_shortname.*=.*\'(.*)\'/',
+	'/disqus_shortname.*=.*"(.*)"/'
+    )
+));
 function setup_wizard()
 {
     $config_options = array('api_key', 'access_token');
@@ -92,6 +99,58 @@ function curl_fileds_str($fields)
     rtrim($fields_string,'&');
     return $fields_string;
 }
+function read_from_pattern_file()
+{
+    $patterns = array();
+    if(file_exists(PATTERN_FILE))
+    {
+	$patterns = file(PATTERN_FILE);
+	if($patterns == false)
+	{
+	    echo "Cannot open pattern file: ".PATTERN_FILE."\n";
+	    exit(1);
+	}
+
+	$new = array_diff(unserialize(DEFAULT_PATTERNS), array_map('trim', $patterns));
+
+	$pattern_file = fopen(PATTERN_FILE, 'a');
+	if($pattern_file == false)
+	{
+	    echo "Cannot open pattern file: ".PATTERN_FILE."\n";
+	    exit(1);
+	}
+	foreach($new as $toadd)
+	{
+	    if(fwrite($pattern_file, "$toadd\n") == false)
+	    {
+		echo 'Cannot write to pattern file: '.PATTERN_FILE."\n";
+		exit(1);
+	    }
+	}
+    } else
+    {
+	$pattern_file = fopen(PATTERN_FILE, 'a');
+
+	if($pattern_file == false)
+	{
+	    echo "Cannot open pattern file: ".PATTERN_FILE."\n";
+	    exit(1);
+	}
+
+	foreach(unserialize(DEFAULT_PATTERNS) as $pattern)
+	{
+	    if(fwrite($pattern_file, "$pattern\n") == false)
+	    {
+		echo 'Cannot write to pattern file: '.PATTERN_FILE."\n";
+		exit(1);
+	    }
+	    $patterns[] = $pattern;
+	}
+    }
+
+    fclose($pattern_file);
+    return $patterns;
+}
 function get_forum($url)
 {
     $subject = @file_get_contents($url);
@@ -100,17 +159,19 @@ function get_forum($url)
 	echo "Cannot open page with given url.\n";
 	exit(1);
     }
-    $pattern = '/disqus_shortname.*=.*(\'|")(.*)(\'|")/';
-    preg_match($pattern, $subject, $matches);
-    if(isset($matches[2]))
+    $patterns = read_from_pattern_file();
+    foreach($patterns as $pattern)
     {
-	return $matches[2];
-    } else
-    {
-	$domain = str_ireplace('www.', '', parse_url($url, PHP_URL_HOST));
-	$domain_ex = explode('.', $domain);
-	return $domain_ex[0];
+	preg_match($pattern, $subject, $matches);
+	if(isset($matches[1]))
+	{
+	    return $matches[1];
+	}
     }
+    //Nothing found
+    $domain = str_ireplace('www.', '', parse_url($url, PHP_URL_HOST));
+    $domain_ex = explode('.', $domain);
+    return $domain_ex[0];
 }
 function help_msg()
 {
